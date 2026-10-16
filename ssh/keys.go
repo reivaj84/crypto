@@ -189,6 +189,7 @@ func ParseKnownHosts(in []byte) (marker string, hosts []string, pubKey PublicKey
 // ParseAuthorizedKey parses a public key from an authorized_keys
 // file used in OpenSSH according to the sshd(8) manual page.
 func ParseAuthorizedKey(in []byte) (out PublicKey, comment string, options []string, rest []byte, err error) {
+	var lastErr error
 	for len(in) > 0 {
 		end := bytes.IndexByte(in, '\n')
 		if end != -1 {
@@ -218,6 +219,7 @@ func ParseAuthorizedKey(in []byte) (out PublicKey, comment string, options []str
 		if out, comment, err = parseAuthorizedKey(in[i:]); err == nil {
 			return out, comment, options, rest, nil
 		}
+		lastErr = err
 
 		// No key type recognised. Maybe there's an options field at
 		// the beginning.
@@ -260,9 +262,14 @@ func ParseAuthorizedKey(in []byte) (out PublicKey, comment string, options []str
 			options = candidateOptions
 			return out, comment, options, rest, nil
 		}
+		lastErr = err
 
 		in = rest
 		continue
+	}
+
+	if lastErr != nil {
+		return nil, "", nil, nil, fmt.Errorf("ssh: no key found; last parsing error for ignored line: %w", lastErr)
 	}
 
 	return nil, "", nil, nil, errors.New("ssh: no key found")
